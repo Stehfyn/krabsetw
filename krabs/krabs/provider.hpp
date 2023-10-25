@@ -112,6 +112,9 @@ namespace krabs {
              */
             void add_filter(const event_filter &f);
 
+            void add_on_event_end_callback(const std::function<void()>& callback);
+            std::deque<event_filter>& get_filters(void);
+
         protected:
 
             /**
@@ -124,6 +127,7 @@ namespace krabs {
         protected:
             std::deque<provider_callback> callbacks_;
             std::deque<provider_error_callback> error_callbacks_;
+            std::deque<std::function<void()>> event_end_callbacks_;
             std::deque<event_filter> filters_;
 
         private:
@@ -474,11 +478,21 @@ namespace krabs {
             // actually copy these.
             error_callbacks_.push_back(callback);
         }
-
+        template <typename T>
+        void base_provider<T>::add_on_event_end_callback(const std::function<void()>& callback)
+        {
+            event_end_callbacks_.push_back(callback);
+        }
         template <typename T>
         void base_provider<T>::add_filter(const event_filter &f)
         {
             filters_.push_back(f);
+        }
+
+        template <typename T>
+        std::deque<event_filter>& base_provider<T>::get_filters(void)
+        {
+            return filters_;
         }
 
         template <typename T>
@@ -492,6 +506,10 @@ namespace krabs {
 
                 for (auto& filter : filters_) {
                     filter.on_event(record, trace_context);
+                }
+
+                for (auto& callback : event_end_callbacks_) {
+                    callback();
                 }
             }
             catch (krabs::could_not_find_schema& ex)

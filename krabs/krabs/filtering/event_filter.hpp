@@ -99,6 +99,24 @@ namespace krabs {
         template <typename U>
         void add_on_error_callback(const U& callback);
 
+        /**
+         * <summary>
+         * Adds a function to call when after event and error processing occurs.
+         * </summary>
+         */
+        template <typename U>
+        void add_on_event_end_callback(const std::function<void()>& callback);
+
+        /**
+         * <summary>
+         * Swaps the event filter predicate with argument. Calls of swap_predicate
+         * must be synchronized to execute after event and error processing, thus
+         * is meant to be utilized within an on_event_end callback.
+         * </summary>
+         */
+        template <typename U>
+        void swap_predicate(filter_predicate predicate);
+
         const std::vector<unsigned short>& provider_filter_event_ids() const
         {
             return provider_filter_event_ids_;
@@ -112,7 +130,7 @@ namespace krabs {
          *   satisfies the predicate.
          * </summary>
          */
-        void on_event(const EVENT_RECORD &record, const krabs::trace_context &trace_context) const;
+        void on_event(const EVENT_RECORD& record, const krabs::trace_context& trace_context) const;
 
         /**
          * <summary>
@@ -124,6 +142,7 @@ namespace krabs {
     private:
         std::deque<provider_event_callback> event_callbacks_;
         std::deque<provider_error_callback> error_callbacks_;
+        std::deque<std::function<void()>> event_end_callbacks_;
         filter_predicate predicate_{ nullptr };
         std::vector<unsigned short> provider_filter_event_ids_;
 
@@ -205,6 +224,18 @@ namespace krabs {
         error_callbacks_.push_back(callback);
     }
 
+    template <typename U>
+    void event_filter::add_on_event_end_callback(const std::function<void()>& callback)
+    {
+        event_end_callbacks_.push_back(callback);
+    }
+
+    template <typename U>
+    void event_filter::swap_predicate(filter_predicate predicate)
+    {
+        predicate_ = predicate;
+    }
+
     inline void event_filter::on_event(const EVENT_RECORD &record, const krabs::trace_context &trace_context) const
     {
         if (event_callbacks_.empty()) {
@@ -219,6 +250,10 @@ namespace krabs {
 
             for (auto& callback : event_callbacks_) {
                 callback(record, trace_context);
+            }
+
+            for (auto& callback : event_end_callbacks_) {
+                callback();
             }
         }
         catch (const krabs::could_not_find_schema& ex)
